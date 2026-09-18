@@ -12,6 +12,8 @@ import { PageHeader } from '../../components/ui/common';
 import { Button } from '../../components/ui/button';
 import { Dialog } from '../../components/ui/dialog';
 import { DataTable } from '../../components/tables/DataTable';
+
+const permissionActions = ['view', 'create', 'edit', 'post', 'export'] as const;
 export function SettingsPage() {
   const auth = useAuth();
   const [confirmCleansing, setConfirmCleansing] = useState(false);
@@ -126,6 +128,17 @@ export function UsersPage() {
     [values, setValues] = useState<Record<string, boolean>>({}),
     [confirm, setConfirm] = useState(false);
   const owner = auth.member?.role === 'OWNER';
+  const setAllPermissions = (checked: boolean) =>
+    setValues(
+      Object.fromEntries(
+        modules.flatMap((module) => permissionActions.map((action) => [module + '.' + action, checked])),
+      ),
+    );
+  const setModulePermissions = (module: (typeof modules)[number], checked: boolean) =>
+    setValues((current: Record<string, boolean>) => ({
+      ...current,
+      ...Object.fromEntries(permissionActions.map((action) => [module + '.' + action, checked])),
+    }));
   return (
     <>
       <PageHeader
@@ -152,7 +165,7 @@ export function UsersPage() {
                       const next: Record<string, boolean> = {};
                       for (const p of allPermissions.data?.filter((p) => p.member_id === r.id) ??
                         []) {
-                        for (const a of ['view', 'create', 'edit', 'post', 'export'])
+                        for (const a of permissionActions)
                           next[`${p.module}.${a}`] = Boolean(p[`can_${a}`]);
                       }
                       setValues(next);
@@ -186,11 +199,22 @@ export function UsersPage() {
               Anggota aktif
             </label>
           </div>
+          <div className="form-footer">
+            <div>
+              <strong>Akses modul</strong>
+              <p className="muted text-sm">Pilih semua akses sekaligus atau atur per modul.</p>
+            </div>
+            <div className="button-group">
+              <Button type="button" size="sm" variant="outline" onClick={() => setAllPermissions(true)}>Pilih semua</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setAllPermissions(false)}>Hapus semua</Button>
+            </div>
+          </div>
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
                   <th>Modul</th>
+                  <th>Semua</th>
                   {['Lihat', 'Buat', 'Edit', 'Posting', 'Export'].map((a) => (
                     <th key={a}>{a}</th>
                   ))}
@@ -200,7 +224,15 @@ export function UsersPage() {
                 {modules.map((m) => (
                   <tr key={m}>
                     <td>{m}</td>
-                    {['view', 'create', 'edit', 'post', 'export'].map((a) => (
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={m + ' Semua'}
+                        checked={permissionActions.every((action) => values[m + '.' + action] ?? false)}
+                        onChange={(e) => setModulePermissions(m, e.target.checked)}
+                      />
+                    </td>
+                    {permissionActions.map((a) => (
                       <td key={a}>
                         <input
                           type="checkbox"
