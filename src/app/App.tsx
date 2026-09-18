@@ -86,7 +86,7 @@ function AuthenticatedApp() {
     return (
       <div className="login-screen">
         <div className="brand-mark">
-          L<span>ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¦</span>
+          L
         </div>
         <h1>Luminails Operation</h1>
         <p>Satu tempat untuk mengelola seluruh operasi bisnis.</p>

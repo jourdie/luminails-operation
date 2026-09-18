@@ -116,7 +116,7 @@ export function AppLayout() {
       <aside className={`sidebar ${mobile ? 'sidebar-open' : ''}`}>
         <Link to="/" className="brand">
           <span className="brand-mark">
-            L<span>Ã¢Å“Â¦</span>
+            L
           </span>
           <span>
             Luminails<small>OPERATION</small>
@@ -230,7 +230,7 @@ export function AppLayout() {
         </header>
         {localMode && (
           <div className="dev-banner">
-            MODE PENGEMBANGAN Â· Data tersimpan di browser ini. Tidak terhubung ke bisnis produksi.
+            MODE PENGEMBANGAN · Data tersimpan di browser ini. Tidak terhubung ke bisnis produksi.
             <Link to="/settings"> Buka Pengaturan untuk cleansing data.</Link>
           </div>
         )}
