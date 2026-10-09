@@ -19,7 +19,7 @@ const tones = {
 export function MetricCard({ label, value, detail, change, direction, tone = 'linen', onClick }: MetricCardProps) {
   const ChangeIcon = direction === 'up' ? ArrowUpRight : direction === 'down' ? ArrowDownRight : Minus
   return (
-    <button type="button" onClick={onClick} className={`group rounded-2xl border p-5 text-left shadow-panel transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blushDeep ${tones[tone]}`}>
+    <button type="button" onClick={onClick} className={`group w-full rounded-2xl border p-5 text-left shadow-panel transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blushDeep ${tones[tone]}`}>
       <div className="flex items-start justify-between gap-4">
         <span className="text-sm font-medium text-stone-600">{label}</span>
         <ChangeIcon className="h-4 w-4 text-stone-500 transition group-hover:text-ink" aria-hidden="true" />

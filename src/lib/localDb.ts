@@ -15,6 +15,16 @@ export type FinancialAccount = {
   active: boolean
 }
 
+export type FinancialBalanceSnapshot = {
+  id: string
+  accountId: string
+  date: string
+  balance: number
+  source: 'MANUAL' | 'BANK_IMPORT' | 'MARKETPLACE_SETTLEMENT' | 'OTHER'
+  note: string
+  createdAt: string
+}
+
 export type WorkspaceMember = {
   id: string
   name: string
@@ -147,6 +157,9 @@ export type SettlementRow = {
   netReleasedIncome: number
   allocationMethod: 'EXACT' | 'ALLOCATED' | 'UNMATCHED'
   importedAt: string
+  reconciliationStatus?: 'PENDING' | 'RECONCILED'
+  reconciledAt?: string
+  reconciliationNote?: string
 }
 
 export type LocalInvoice = {
@@ -177,9 +190,10 @@ export type AuditEntry = {
 }
 
 export type LocalDatabase = {
-  version: 2
+  version: 3
   suppliers: Supplier[]
   financialAccounts: FinancialAccount[]
+  financialBalanceSnapshots: FinancialBalanceSnapshot[]
   workspaceMembers: WorkspaceMember[]
   invoiceSettings: InvoiceSettings
   skus: Sku[]
@@ -203,11 +217,11 @@ export type LocalDashboardData = {
   alerts: Array<{ label: string; detail: string; route: string; tone: 'warning' | 'critical' | 'neutral' }>
 }
 
-const storageKey = 'luminails-ops-local-v2'
+const storageKey = 'luminails-ops-local-v3'
 const now = '2026-10-07T09:00:00.000Z'
 
 const seedDatabase: LocalDatabase = {
-  version: 2,
+  version: 3,
   suppliers: [
     { id: 'supplier-party', name: 'PARTY', code: 'PARTY', active: true },
     { id: 'supplier-bluesky', name: 'Bluesky', code: 'BLUESKY', active: true }
@@ -218,6 +232,7 @@ const seedDatabase: LocalDatabase = {
     { id: 'account-pending', name: 'Marketplace Pending', type: 'PENDING', openingBalance: 831900, active: true },
     { id: 'account-card', name: 'Kartu Kredit Bisnis', type: 'CREDIT_CARD', openingBalance: 4200000, active: true }
   ],
+  financialBalanceSnapshots: [],
   workspaceMembers: [
     { id: 'member-owner', name: 'Owner Luminails', email: 'owner@luminails.local', role: 'OWNER', active: true, permissions: { '*': 'admin' } },
     { id: 'member-ops', name: 'Ops Manager', email: 'ops@luminails.local', role: 'MANAGER', active: true, permissions: { dashboard: 'view', inventory: 'edit', restock: 'edit', supplier_deposit: 'edit', reports: 'view', shopee_orders: 'edit', manual_orders: 'edit', b2b: 'view', finance: 'view', settings: 'view' } }
@@ -268,8 +283,8 @@ const seedDatabase: LocalDatabase = {
     { id: 'expense-packaging-oct', date: '2026-10-01', description: 'Packaging October', category: 'PACKAGING', purpose: 'BUSINESS', paymentSource: 'CASH_BANK', amount: 1350000 }
   ],
   settlements: [
-    { id: 'settlement-001', externalOrderId: 'SHP-240906-001', grossProductSales: 1010000, sellerDiscount: 80000, refund: 0, platformFee: 50500, processingFee: 10100, freeShippingFee: 5000, serviceFee: 12000, promotionFee: 8000, shopeeTax: 2500, otherShopeeFee: 0, netReleasedIncome: 831900, allocationMethod: 'EXACT', importedAt: now },
-    { id: 'settlement-002', externalOrderId: 'SHP-240906-002', grossProductSales: 178000, sellerDiscount: 0, refund: 0, platformFee: 8900, processingFee: 1780, freeShippingFee: 0, serviceFee: 2100, promotionFee: 0, shopeeTax: 450, otherShopeeFee: 0, netReleasedIncome: 164770, allocationMethod: 'EXACT', importedAt: now }
+    { id: 'settlement-001', externalOrderId: 'SHP-240906-001', grossProductSales: 1010000, sellerDiscount: 80000, refund: 0, platformFee: 50500, processingFee: 10100, freeShippingFee: 5000, serviceFee: 12000, promotionFee: 8000, shopeeTax: 2500, otherShopeeFee: 0, netReleasedIncome: 831900, allocationMethod: 'EXACT', importedAt: now, reconciliationStatus: 'PENDING' },
+    { id: 'settlement-002', externalOrderId: 'SHP-240906-002', grossProductSales: 178000, sellerDiscount: 0, refund: 0, platformFee: 8900, processingFee: 1780, freeShippingFee: 0, serviceFee: 2100, promotionFee: 0, shopeeTax: 450, otherShopeeFee: 0, netReleasedIncome: 164770, allocationMethod: 'EXACT', importedAt: now, reconciliationStatus: 'PENDING' }
   ],
   invoices: [
     { id: 'invoice-001', invoiceNumber: 'LUM-INV-2026-0001', orderId: 'order-b2b-001', customer: 'PT Cantik Bersama', total: 1150000, dueDate: '2026-10-17', status: 'PARTIALLY_PAID', customerSnapshot: { name: 'PT Cantik Bersama', address: 'Jakarta Selatan' } }
@@ -288,26 +303,28 @@ export function createId(prefix: string): string {
 }
 
 export function getLocalDatabase(): LocalDatabase {
-  if (typeof window === 'undefined') return seedDatabase
+  if (typeof window === 'undefined') return createEmptyLocalDatabase()
   try {
     const stored = window.localStorage.getItem(storageKey)
     if (!stored) {
-      window.localStorage.setItem(storageKey, JSON.stringify(seedDatabase))
-      return seedDatabase
+      const emptyDatabase = createEmptyLocalDatabase()
+      window.localStorage.setItem(storageKey, JSON.stringify(emptyDatabase))
+      return emptyDatabase
     }
     const parsed = JSON.parse(stored) as LocalDatabase
-    return parsed.version === 2 ? {
+    return parsed.version === 3 ? {
       ...parsed,
-      financialAccounts: parsed.financialAccounts ?? seedDatabase.financialAccounts,
+      financialAccounts: parsed.financialAccounts ?? [],
+      financialBalanceSnapshots: parsed.financialBalanceSnapshots ?? [],
       workspaceMembers: parsed.workspaceMembers ?? seedDatabase.workspaceMembers,
       invoiceSettings: parsed.invoiceSettings ?? seedDatabase.invoiceSettings,
       costVersions: parsed.costVersions ?? [],
-      settlements: parsed.settlements ?? [],
+      settlements: (parsed.settlements ?? []).map((row) => ({ ...row, reconciliationStatus: row.reconciliationStatus ?? 'PENDING' })),
       invoices: parsed.invoices ?? [],
       payments: parsed.payments ?? []
-    } : seedDatabase
+    } : createEmptyLocalDatabase()
   } catch {
-    return seedDatabase
+    return createEmptyLocalDatabase()
   }
 }
 
@@ -322,9 +339,10 @@ export function resetLocalDatabase(): LocalDatabase {
 
 export function createEmptyLocalDatabase(): LocalDatabase {
   return {
-    version: 2,
+    version: 3,
     suppliers: [],
     financialAccounts: [],
+    financialBalanceSnapshots: [],
     workspaceMembers: [{ id: 'member-owner', name: 'Owner Luminails', email: 'owner@luminails.local', role: 'OWNER', active: true, permissions: { '*': 'admin' } }],
     invoiceSettings: { ...seedDatabase.invoiceSettings },
     skus: [],
@@ -349,6 +367,13 @@ export function clearLocalWorkspace(): LocalDatabase {
 
 export const localSeedDatabase = seedDatabase
 
+export function financialAccountBalance(database: Pick<LocalDatabase, 'financialBalanceSnapshots'>, account: FinancialAccount): number {
+  const snapshots = database.financialBalanceSnapshots
+    .filter((snapshot) => snapshot.accountId === account.id)
+    .sort((left, right) => `${left.date}-${left.createdAt}`.localeCompare(`${right.date}-${right.createdAt}`))
+  return snapshots.at(-1)?.balance ?? account.openingBalance
+}
+
 export function getLocalDashboardData(): LocalDashboardData {
   const database = getLocalDatabase()
   const salesCount = database.salesOrders.length
@@ -359,8 +384,8 @@ export function getLocalDashboardData(): LocalDashboardData {
   const settlementFees = database.settlements.reduce((sum, row) => sum + row.platformFee + row.processingFee + row.freeShippingFee + row.serviceFee + row.promotionFee + row.shopeeTax + row.otherShopeeFee, 0)
   const businessExpenses = database.expenses.filter((expense) => expense.purpose === 'BUSINESS').reduce((sum, expense) => sum + expense.amount, 0)
   const operatingProfit = grossSales - cogs - settlementFees - businessExpenses
-  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + account.openingBalance, 0)
-  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + account.openingBalance, 0)
+  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
+  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
   const supplierDeposit = database.suppliers.reduce((sum, supplier) => sum + database.depositMovements.filter((movement) => movement.supplierId === supplier.id).reduce((balance, movement) => balance + movement.amountDelta, 0), 0)
   const stockValue = database.skus.reduce((sum, sku) => sum + database.inventoryMovements.filter((movement) => movement.skuId === sku.id).reduce((balance, movement) => balance + movement.qtyDelta, 0) * sku.hpp, 0)
   const receivables = database.invoices.reduce((sum, invoice) => sum + invoice.total - database.payments.filter((payment) => payment.invoiceId === invoice.id).reduce((paid, payment) => paid + payment.amount, 0), 0)
