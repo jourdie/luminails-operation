@@ -1,4 +1,5 @@
 import { formatCompactIdr } from './money'
+import { defaultCutoffDate, formatCutoffLabel, isOnOrBefore } from './date'
 
 export type Supplier = {
   id: string
@@ -367,28 +368,34 @@ export function clearLocalWorkspace(): LocalDatabase {
 
 export const localSeedDatabase = seedDatabase
 
-export function financialAccountBalance(database: Pick<LocalDatabase, 'financialBalanceSnapshots'>, account: FinancialAccount): number {
+export function financialAccountBalance(database: Pick<LocalDatabase, 'financialBalanceSnapshots'>, account: FinancialAccount, cutoffDate?: string): number {
   const snapshots = database.financialBalanceSnapshots
     .filter((snapshot) => snapshot.accountId === account.id)
+    .filter((snapshot) => !cutoffDate || isOnOrBefore(snapshot.date, cutoffDate))
     .sort((left, right) => `${left.date}-${left.createdAt}`.localeCompare(`${right.date}-${right.createdAt}`))
   return snapshots.at(-1)?.balance ?? account.openingBalance
 }
 
-export function getLocalDashboardData(): LocalDashboardData {
+export function getLocalDashboardData(cutoffDate = defaultCutoffDate): LocalDashboardData {
   const database = getLocalDatabase()
-  const salesCount = database.salesOrders.length
-  const unallocated = database.salesOrders.filter((order) => order.status === 'SHIPPED' && order.allocations.length === 0).length
-  const lowStock = database.skus.filter((sku) => database.inventoryMovements.filter((movement) => movement.skuId === sku.id).reduce((sum, movement) => sum + movement.qtyDelta, 0) <= sku.minimumStock).length
-  const grossSales = database.salesOrders.reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.qty * item.discountPrice, 0), 0)
-  const cogs = database.salesOrders.reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.qty * (database.skus.find((sku) => sku.id === item.skuId)?.hpp ?? 0), 0), 0)
-  const settlementFees = database.settlements.reduce((sum, row) => sum + row.platformFee + row.processingFee + row.freeShippingFee + row.serviceFee + row.promotionFee + row.shopeeTax + row.otherShopeeFee, 0)
-  const businessExpenses = database.expenses.filter((expense) => expense.purpose === 'BUSINESS').reduce((sum, expense) => sum + expense.amount, 0)
+  const salesOrders = database.salesOrders.filter((order) => isOnOrBefore(order.date, cutoffDate))
+  const inventoryMovements = database.inventoryMovements.filter((movement) => isOnOrBefore(movement.date, cutoffDate))
+  const depositMovements = database.depositMovements.filter((movement) => isOnOrBefore(movement.date, cutoffDate))
+  const expenses = database.expenses.filter((expense) => isOnOrBefore(expense.date, cutoffDate))
+  const settlements = database.settlements.filter((row) => isOnOrBefore(row.importedAt, cutoffDate))
+  const salesCount = salesOrders.length
+  const unallocated = salesOrders.filter((order) => order.status === 'SHIPPED' && order.allocations.length === 0).length
+  const lowStock = database.skus.filter((sku) => inventoryMovements.filter((movement) => movement.skuId === sku.id).reduce((sum, movement) => sum + movement.qtyDelta, 0) <= sku.minimumStock).length
+  const grossSales = salesOrders.reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.qty * item.discountPrice, 0), 0)
+  const cogs = salesOrders.reduce((sum, order) => sum + order.items.reduce((orderSum, item) => orderSum + item.qty * (database.skus.find((sku) => sku.id === item.skuId)?.hpp ?? 0), 0), 0)
+  const settlementFees = settlements.reduce((sum, row) => sum + row.platformFee + row.processingFee + row.freeShippingFee + row.serviceFee + row.promotionFee + row.shopeeTax + row.otherShopeeFee, 0)
+  const businessExpenses = expenses.filter((expense) => expense.purpose === 'BUSINESS').reduce((sum, expense) => sum + expense.amount, 0)
   const operatingProfit = grossSales - cogs - settlementFees - businessExpenses
-  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
-  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
-  const supplierDeposit = database.suppliers.reduce((sum, supplier) => sum + database.depositMovements.filter((movement) => movement.supplierId === supplier.id).reduce((balance, movement) => balance + movement.amountDelta, 0), 0)
-  const stockValue = database.skus.reduce((sum, sku) => sum + database.inventoryMovements.filter((movement) => movement.skuId === sku.id).reduce((balance, movement) => balance + movement.qtyDelta, 0) * sku.hpp, 0)
-  const receivables = database.invoices.reduce((sum, invoice) => sum + invoice.total - database.payments.filter((payment) => payment.invoiceId === invoice.id).reduce((paid, payment) => paid + payment.amount, 0), 0)
+  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account, cutoffDate), 0)
+  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account, cutoffDate), 0)
+  const supplierDeposit = database.suppliers.reduce((sum, supplier) => sum + depositMovements.filter((movement) => movement.supplierId === supplier.id).reduce((balance, movement) => balance + movement.amountDelta, 0), 0)
+  const stockValue = database.skus.reduce((sum, sku) => sum + inventoryMovements.filter((movement) => movement.skuId === sku.id).reduce((balance, movement) => balance + movement.qtyDelta, 0) * sku.hpp, 0)
+  const receivables = database.invoices.reduce((sum, invoice) => sum + invoice.total - database.payments.filter((payment) => isOnOrBefore(payment.date, cutoffDate) && payment.invoiceId === invoice.id).reduce((paid, payment) => paid + payment.amount, 0), 0)
   const netPosition = accountAssets + supplierDeposit + stockValue + receivables - accountLiabilities
   const alerts: LocalDashboardData['alerts'] = []
   if (!database.skus.length && !database.suppliers.length && !database.financialAccounts.length) alerts.push({ label: 'Workspace belum di-setup', detail: 'Data Setup', route: '/settings/data-setup', tone: 'warning' })
@@ -397,8 +404,8 @@ export function getLocalDashboardData(): LocalDashboardData {
   const inTransit = database.restocks.filter((restock) => restock.status === 'IN_TRANSIT' || restock.status === 'PARTIAL').length
   if (inTransit > 0) alerts.push({ label: `${inTransit} restock masih berjalan`, detail: 'Restock', route: '/operations/restock', tone: 'warning' })
   return {
-    period: '1 - 9 Oktober 2026',
-    profit: { value: formatCompactIdr(operatingProfit), comparison: database.salesOrders.length ? 'Berdasarkan data lokal' : 'Belum ada transaksi', change: database.salesOrders.length ? 'Aktual lokal' : 'Input manual' },
+    period: formatCutoffLabel(cutoffDate),
+    profit: { value: formatCompactIdr(operatingProfit), comparison: salesOrders.length ? 'Berdasarkan data sampai cutoff' : 'Belum ada transaksi', change: salesOrders.length ? 'Aktual lokal' : 'Input manual' },
     position: { value: formatCompactIdr(netPosition), detail: 'Assets dikurangi liabilities', change: database.financialAccounts.length || database.skus.length ? 'Aktual lokal' : 'Input manual' },
     operations: [
       { label: 'Pesanan masuk', value: String(salesCount), detail: 'Shopee dan manual' },

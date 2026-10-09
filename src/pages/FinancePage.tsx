@@ -3,8 +3,11 @@ import { useMemo, useState, type ComponentProps, type FormEvent } from 'react'
 import { PageHeader } from '../components/ui/PageHeader'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { ImportSettlementModal } from '../components/imports/ImportSettlementModal'
+import { CutoffDatePicker } from '../components/ui/CutoffDatePicker'
+import { useCutoffDate } from '../hooks/useCutoffDate'
 import { useLocalDatabase } from '../hooks/useLocalDatabase'
 import { inventoryValue } from '../lib/ledger'
+import { formatDateId, isOnOrBefore } from '../lib/date'
 import { createId, financialAccountBalance, type Expense } from '../lib/localDb'
 import { formatCompactIdr, formatIdr } from '../lib/money'
 
@@ -16,26 +19,32 @@ export function FinancePage({ view }: { view: 'profit-loss' | 'position' | 'expe
   const [amount, setAmount] = useState('')
   const [purpose, setPurpose] = useState<'BUSINESS' | 'PERSONAL'>('BUSINESS')
   const [paymentSource, setPaymentSource] = useState<'CASH_BANK' | 'CREDIT_CARD' | 'OTHER'>('CASH_BANK')
-  const settlementSales = database.settlements.reduce((sum, row) => sum + row.grossProductSales - row.sellerDiscount - row.refund, 0)
-  const grossSales = database.settlements.length > 0 ? settlementSales : database.salesOrders.reduce((sum, order) => sum + order.items.reduce((lineTotal, item) => lineTotal + item.discountPrice * item.qty, 0), 0)
-  const cogs = database.salesOrders.reduce((sum, order) => sum + order.items.reduce((lineTotal, item) => { const sku = database.skus.find((entry) => entry.id === item.skuId); return lineTotal + (sku?.hpp ?? 0) * item.qty }, 0), 0)
-  const businessExpenses = database.expenses.filter((expense) => expense.purpose === 'BUSINESS').reduce((sum, expense) => sum + expense.amount, 0)
-  const settlementFees = database.settlements.reduce((sum, row) => sum + row.platformFee + row.processingFee + row.freeShippingFee + row.serviceFee + row.promotionFee + row.shopeeTax + row.otherShopeeFee, 0)
+  const { cutoffDate, setCutoffDate } = useCutoffDate()
+  const visibleSettlements = database.settlements.filter((row) => isOnOrBefore(row.importedAt, cutoffDate))
+  const visibleOrders = database.salesOrders.filter((order) => isOnOrBefore(order.date, cutoffDate))
+  const visibleExpenses = database.expenses.filter((expense) => isOnOrBefore(expense.date, cutoffDate))
+  const visibleInventoryMovements = database.inventoryMovements.filter((movement) => isOnOrBefore(movement.date, cutoffDate))
+  const visibleDepositMovements = database.depositMovements.filter((movement) => isOnOrBefore(movement.date, cutoffDate))
+  const settlementSales = visibleSettlements.reduce((sum, row) => sum + row.grossProductSales - row.sellerDiscount - row.refund, 0)
+  const grossSales = visibleSettlements.length > 0 ? settlementSales : visibleOrders.reduce((sum, order) => sum + order.items.reduce((lineTotal, item) => lineTotal + item.discountPrice * item.qty, 0), 0)
+  const cogs = visibleOrders.reduce((sum, order) => sum + order.items.reduce((lineTotal, item) => { const sku = database.skus.find((entry) => entry.id === item.skuId); return lineTotal + (sku?.hpp ?? 0) * item.qty }, 0), 0)
+  const businessExpenses = visibleExpenses.filter((expense) => expense.purpose === 'BUSINESS').reduce((sum, expense) => sum + expense.amount, 0)
+  const settlementFees = visibleSettlements.reduce((sum, row) => sum + row.platformFee + row.processingFee + row.freeShippingFee + row.serviceFee + row.promotionFee + row.shopeeTax + row.otherShopeeFee, 0)
   const grossProfit = grossSales - cogs
   const contributionProfit = grossProfit - settlementFees
   const operatingProfit = contributionProfit - businessExpenses
-  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
-  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account), 0)
-  const assets = database.depositMovements.reduce((sum, movement) => sum + movement.amountDelta, 0) + inventoryValue(database.inventoryMovements, database.skus) + accountAssets
-  const liabilities = accountLiabilities + database.expenses.filter((expense) => expense.paymentSource === 'CREDIT_CARD').reduce((sum, expense) => sum + expense.amount, 0)
-  const pendingReconciliation = database.settlements.filter((row) => row.reconciliationStatus !== 'RECONCILED')
-  const rows = useMemo(() => [...database.expenses].reverse(), [database.expenses])
+  const accountAssets = database.financialAccounts.filter((account) => account.active && !['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account, cutoffDate), 0)
+  const accountLiabilities = database.financialAccounts.filter((account) => account.active && ['CREDIT_CARD', 'LOAN'].includes(account.type)).reduce((sum, account) => sum + financialAccountBalance(database, account, cutoffDate), 0)
+  const assets = visibleDepositMovements.reduce((sum, movement) => sum + movement.amountDelta, 0) + inventoryValue(visibleInventoryMovements, database.skus) + accountAssets
+  const liabilities = accountLiabilities + visibleExpenses.filter((expense) => expense.paymentSource === 'CREDIT_CARD').reduce((sum, expense) => sum + expense.amount, 0)
+  const pendingReconciliation = visibleSettlements.filter((row) => row.reconciliationStatus !== 'RECONCILED')
+  const rows = useMemo(() => visibleExpenses.slice().reverse(), [visibleExpenses])
 
   function submitExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const parsedAmount = Number(amount)
     if (!description.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) return
-    updateDatabase((current) => ({ ...current, expenses: [{ id: createId('expense'), date: '2026-10-07', description: description.trim(), category: 'OTHER_OPEX', purpose, paymentSource, amount: parsedAmount }, ...current.expenses], audits: [{ id: createId('audit'), date: '2026-10-07 09:00', action: 'EXPENSE_CREATED', entity: description.trim(), detail: `${purpose} ${paymentSource} ${formatIdr(parsedAmount)}` }, ...current.audits] }))
+    updateDatabase((current) => ({ ...current, expenses: [{ id: createId('expense'), date: cutoffDate, description: description.trim(), category: 'OTHER_OPEX', purpose, paymentSource, amount: parsedAmount }, ...current.expenses], audits: [{ id: createId('audit'), date: `${cutoffDate} 09:00`, action: 'EXPENSE_CREATED', entity: description.trim(), detail: `${purpose} ${paymentSource} ${formatIdr(parsedAmount)}` }, ...current.audits] }))
     setDescription('')
     setAmount('')
     setPurpose('BUSINESS')
@@ -58,7 +67,7 @@ export function FinancePage({ view }: { view: 'profit-loss' | 'position' | 'expe
     updateDatabase((current) => ({ ...current, settlements: current.settlements.map((row) => row.reconciliationStatus === 'RECONCILED' ? row : { ...row, reconciliationStatus: 'RECONCILED', reconciledAt: new Date().toISOString(), reconciliationNote: 'Acknowledged manual report' }), audits: [{ id: createId('audit'), date: '2026-10-09 09:00', action: 'SETTLEMENT_RECONCILED', entity: 'settlement_batch_local', detail: `${pendingReconciliation.length} settlement rows di-acknowledge sebagai sesuai report manual` }, ...current.audits] }))
   }
 
-  if (view === 'expenses') return <div className="space-y-7"><PageHeader title="Expenses dan Liabilities" description="Pisahkan biaya bisnis dan personal. Pembayaran kartu kredit menambah liability, tetapi repayment bukan expense kedua." action={<button type="button" onClick={() => setShowExpense(true)} className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Catat expense</button>} /><section className="grid gap-4 md:grid-cols-3"><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><Wallet className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Business expense</p><p className="mt-2 font-display text-2xl font-semibold">{formatCompactIdr(businessExpenses)}</p></div><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><CreditCard className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Credit card liability</p><p className="mt-2 font-display text-2xl font-semibold">{formatCompactIdr(liabilities)}</p></div><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><ReceiptText className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Periode aktif</p><p className="mt-2 font-display text-2xl font-semibold">Oktober</p></div></section><ExpenseTable rows={rows} />{showExpense && <ExpenseForm description={description} amount={amount} purpose={purpose} paymentSource={paymentSource} setDescription={setDescription} setAmount={setAmount} setPurpose={setPurpose} setPaymentSource={setPaymentSource} onSubmit={submitExpense} onClose={() => setShowExpense(false)} />}</div>
+  if (view === 'expenses') return <div className="space-y-7"><PageHeader title="Expenses dan Liabilities" description="Pisahkan biaya bisnis dan personal. Pembayaran kartu kredit menambah liability, tetapi repayment bukan expense kedua." action={<div className="flex flex-wrap gap-2"><button type="button" onClick={() => setShowExpense(true)} className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white"><Plus className="h-4 w-4" /> Catat expense</button><CutoffDatePicker cutoffDate={cutoffDate} onChange={setCutoffDate} /></div>} /><section className="grid gap-4 md:grid-cols-3"><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><Wallet className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Business expense</p><p className="mt-2 font-display text-2xl font-semibold">{formatCompactIdr(businessExpenses)}</p></div><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><CreditCard className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Credit card liability</p><p className="mt-2 font-display text-2xl font-semibold">{formatCompactIdr(liabilities)}</p></div><div className="rounded-2xl border border-stone-200 bg-shell p-5 shadow-panel"><ReceiptText className="h-5 w-5 text-blushDeep" /><p className="mt-5 text-sm text-stone-500">Cutoff aktif</p><p className="mt-2 font-display text-2xl font-semibold">{formatDateId(cutoffDate)}</p></div></section><ExpenseTable rows={rows} />{showExpense && <ExpenseForm description={description} amount={amount} purpose={purpose} paymentSource={paymentSource} setDescription={setDescription} setAmount={setAmount} setPurpose={setPurpose} setPaymentSource={setPaymentSource} onSubmit={submitExpense} onClose={() => setShowExpense(false)} />}</div>
 
   if (view === 'position') return <div className="space-y-7"><PageHeader title="Business Position" description="Posisi aset dan liabilities saat ini. Angka ini bukan profit. Update saldo bank, cash, dan credit card tersedia di Settings → Financial Accounts." action={<div className="rounded-xl border border-stone-200 bg-shell px-4 py-3 text-sm text-stone-600">Snapshot 9 Oktober 2026</div>} /><section className="grid gap-4 md:grid-cols-3"><div className="rounded-2xl border border-stone-200 bg-shell p-6 shadow-panel"><p className="text-sm text-stone-500">Total Assets</p><p className="mt-4 font-display text-3xl font-semibold">{formatCompactIdr(assets)}</p></div><div className="rounded-2xl border border-stone-200 bg-shell p-6 shadow-panel"><p className="text-sm text-stone-500">Total Liabilities</p><p className="mt-4 font-display text-3xl font-semibold">{formatCompactIdr(liabilities)}</p></div><div className="rounded-2xl border border-sage bg-sage/55 p-6 shadow-panel"><p className="text-sm text-emerald-950">Net Business Position</p><p className="mt-4 font-display text-3xl font-semibold text-emerald-950">{formatCompactIdr(assets - liabilities)}</p></div></section><section className="grid gap-4 md:grid-cols-2"><PositionRow label="Inventory" value={inventoryValue(database.inventoryMovements, database.skus)} icon={Wallet} /><PositionRow label="Supplier Deposit" value={database.depositMovements.reduce((sum, movement) => sum + movement.amountDelta, 0)} icon={Wallet} /><PositionRow label="Cash dan Bank" value={accountAssets} icon={Wallet} /><PositionRow label="Credit Card dan Loan" value={accountLiabilities} icon={CreditCard} negative /></section></div>
 

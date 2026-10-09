@@ -13,6 +13,9 @@ def main() -> None:
         body_text = page.locator("body").inner_text()
         assert "0" in body_text
         assert "54.000.000" not in page.locator("body").inner_text()
+        page.get_by_label("Pilih tanggal cutoff").fill("2026-10-06")
+        page.locator("label").get_by_text("Sampai 6 Oktober 2026").wait_for()
+        assert "asOf=2026-10-06" in page.url
 
         page.goto("http://127.0.0.1:5180/settings/accounts", wait_until="networkidle")
         page.get_by_role("button", name="Tambah akun").click()
@@ -21,12 +24,20 @@ def main() -> None:
         page.get_by_role("button", name="Simpan akun").click()
         page.get_by_role("button", name="Update saldo").click()
         page.get_by_label("Saldo aktual (IDR)").fill("1250000")
+        page.get_by_label("Tanggal saldo").fill("2026-10-06")
         page.get_by_role("button", name="Simpan snapshot").click()
         assert "1.250.000" in page.locator("body").inner_text()
 
-        page.goto("http://127.0.0.1:5180/finance/business-position", wait_until="networkidle")
+        page.goto("http://127.0.0.1:5180/finance/business-position?asOf=2026-10-06", wait_until="networkidle")
         assert "1.250.000" in page.locator("body").inner_text()
         assert "54.000.000" not in page.locator("body").inner_text()
+
+        page.goto("http://127.0.0.1:5180/finance/cash-bank?asOf=2026-10-06", wait_until="networkidle")
+        page.get_by_role("heading", name="Cash & Bank").wait_for()
+        page.goto("http://127.0.0.1:5180/finance/assets?asOf=2026-10-06", wait_until="networkidle")
+        page.get_by_role("heading", name="Assets", exact=True).wait_for()
+        page.goto("http://127.0.0.1:5180/finance/liabilities?asOf=2026-10-06", wait_until="networkidle")
+        page.get_by_role("heading", name="Liabilities", exact=True).wait_for()
 
         page.goto("http://127.0.0.1:5180/operations/inventory", wait_until="networkidle")
         with page.expect_download() as download_info:

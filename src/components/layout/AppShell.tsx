@@ -1,8 +1,10 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BarChart3, Bell, ChevronDown, CircleHelp, Database, LayoutDashboard, Menu, Package, Receipt, Settings2, ShoppingBag, Store, Wallet, X } from 'lucide-react'
+import { BarChart3, Bell, Building2, ChevronDown, CircleHelp, CreditCard, Database, LayoutDashboard, Menu, Package, Receipt, Settings2, ShoppingBag, Store, Wallet, X } from 'lucide-react'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useAuth } from '../../auth/AuthProvider'
+import { useCutoffDate } from '../../hooks/useCutoffDate'
+import { CutoffDatePicker } from '../ui/CutoffDatePicker'
 import { hasPermission, type ModuleKey } from '../../lib/permissions'
 
 type NavItem = { label: string; to: string; module: ModuleKey; icon: typeof LayoutDashboard }
@@ -30,9 +32,12 @@ const navGroups: NavGroup[] = [
   {
     label: 'Finance',
     items: [
-      { label: 'Profit dan Loss', to: '/finance/profit-loss', module: 'finance', icon: Wallet },
+      { label: 'P&L / Income Statement', to: '/finance/profit-loss', module: 'finance', icon: BarChart3 },
+      { label: 'Cash & Bank', to: '/finance/cash-bank', module: 'finance', icon: Wallet },
+      { label: 'Assets', to: '/finance/assets', module: 'finance', icon: Building2 },
+      { label: 'Liabilities', to: '/finance/liabilities', module: 'finance', icon: CreditCard },
       { label: 'Business Position', to: '/finance/business-position', module: 'finance', icon: LayoutDashboard },
-      { label: 'Expenses dan Liabilities', to: '/finance/expenses', module: 'finance', icon: Receipt }
+      { label: 'Expenses', to: '/finance/expenses', module: 'finance', icon: Receipt }
     ]
   },
   {
@@ -57,6 +62,7 @@ export function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const { cutoffDate, setCutoffDate } = useCutoffDate()
 
   const availableGroups = navGroups.map((group) => ({
     ...group,
@@ -84,7 +90,7 @@ export function AppShell() {
                 {group.items.map((item) => {
                   const Icon = item.icon
                   return (
-                    <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={() => setIsMobileNavOpen(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? 'bg-blush/35 text-ink' : 'text-stone-600 hover:bg-linen hover:text-ink'}`}>
+                    <NavLink key={item.to} to={`${item.to}${location.search}`} end={item.to === '/'} onClick={() => setIsMobileNavOpen(false)} className={({ isActive }) => `flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blushDeep ${isActive ? 'bg-blush/35 text-ink' : 'text-stone-600 hover:bg-linen hover:text-ink'}`}>
                       <Icon className="h-4 w-4" aria-hidden="true" />
                       <span>{item.label}</span>
                     </NavLink>
@@ -105,6 +111,7 @@ export function AppShell() {
           </button>
           <div className="hidden items-center gap-3 text-sm text-stone-500 lg:flex"><span>{membership?.workspaceName ?? 'Luminails'}</span>{isDemoMode && <span className="rounded-full border border-amber bg-amber/70 px-2 py-1 text-[11px] font-semibold text-amber-950">Mode lokal</span>}</div>
           <div className="ml-auto flex items-center gap-2">
+            <div className="hidden xl:block"><CutoffDatePicker cutoffDate={cutoffDate} onChange={setCutoffDate} /></div>
             <button type="button" className="rounded-lg p-2.5 text-stone-500 hover:bg-shell" aria-label="Notifikasi"><Bell className="h-5 w-5" /></button>
             <div className="mx-2 h-7 w-px bg-stone-200" />
             <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
@@ -117,7 +124,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="mx-auto max-w-[1440px] p-5 md:p-9">
+        <div className="mx-auto min-w-0 max-w-[1440px] overflow-x-hidden p-5 md:p-9">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={location.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2, ease: 'easeOut' }}>
               <Outlet />

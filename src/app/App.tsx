@@ -14,6 +14,7 @@ const OrdersPage = lazy(() => import('../pages/OrdersPage').then((module) => ({ 
 const B2BPage = lazy(() => import('../pages/B2BPage').then((module) => ({ default: module.B2BPage })))
 const ReconciliationPage = lazy(() => import('../pages/ReconciliationPage').then((module) => ({ default: module.ReconciliationPage })))
 const FinancePage = lazy(() => import('../pages/FinancePage').then((module) => ({ default: module.FinancePage })))
+const FinanceAccountsPage = lazy(() => import('../pages/FinanceAccountsPage').then((module) => ({ default: module.FinanceAccountsPage })))
 const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const DataSetupPage = lazy(() => import('../pages/DataSetupPage').then((module) => ({ default: module.DataSetupPage })))
 const ReportsPage = lazy(() => import('../pages/ReportsPage').then((module) => ({ default: module.ReportsPage })))
@@ -54,6 +55,9 @@ export function App() {
           <Route path="operations/supplier-deposit" element={<RequirePermission module="supplier_deposit"><SupplierDepositPage /></RequirePermission>} />
           <Route path="operations/reconciliation" element={<RequirePermission module="reports"><ReconciliationPage /></RequirePermission>} />
           <Route path="finance/profit-loss" element={<RequirePermission module="finance"><FinancePage view="profit-loss" /></RequirePermission>} />
+          <Route path="finance/cash-bank" element={<RequirePermission module="finance"><FinanceAccountsPage view="cash-bank" /></RequirePermission>} />
+          <Route path="finance/assets" element={<RequirePermission module="finance"><FinanceAccountsPage view="assets" /></RequirePermission>} />
+          <Route path="finance/liabilities" element={<RequirePermission module="finance"><FinanceAccountsPage view="liabilities" /></RequirePermission>} />
           <Route path="finance/business-position" element={<RequirePermission module="finance"><FinancePage view="position" /></RequirePermission>} />
           <Route path="finance/expenses" element={<RequirePermission module="finance"><FinancePage view="expenses" /></RequirePermission>} />
           <Route path="reports" element={<RequirePermission module="reports"><ReportsPage /></RequirePermission>} />
