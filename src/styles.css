@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #302b2d;
+  background: #f7f4f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; }
+
+.neo-canvas {
+  --neo-bg: #e9e4df;
+  background: var(--neo-bg);
+}
+
+.neo-sidebar,
+.neo-raised {
+  background: var(--neo-bg);
+  box-shadow: 10px 10px 24px #d4cdc7, -10px -10px 24px #fff;
+}
+
+.neo-inset {
+  background: var(--neo-bg);
+  box-shadow: inset 4px 4px 10px #d5cec8, inset -4px -4px 10px #fff;
+}
+
+.neo-button {
+  background: var(--neo-bg);
+  box-shadow: 4px 4px 9px #d2cbc5, -4px -4px 9px #fff;
+}
+
+.neo-button:active {
+  box-shadow: inset 3px 3px 7px #d2cbc5, inset -3px -3px 7px #fff;
+}
+
+.neo-focus:focus-visible {
+  outline: 3px solid #b87567;
+  outline-offset: 3px;
+}
+
+.neo-eyebrow {
+  color: #a5665b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.neo-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #e3ddd7;
+  padding: 0.3rem 0.65rem;
+  color: #887d77;
+  font-size: 0.68rem;
+  font-weight: 700;
+  box-shadow: inset 2px 2px 5px #d3ccc5, inset -2px -2px 5px #fff;
+}
+
+.neo-chip-ok { background: #dce9df; color: #5f8f70; }
+.neo-chip-warning { background: #f0dfbd; color: #a87938; }
+.neo-tint-blush { background: #eee0da; }
+.neo-tint-sage { background: #e0e9e1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+.dev.vars*
+*.tsbuildinfo
+*.log
+ui-check.png
+.wrangler/

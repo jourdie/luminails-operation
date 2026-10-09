@@ -1,0 +1,16 @@
+create index if not exists skus_workspace_supplier_idx on public.skus (workspace_id, default_supplier_id);
+create index if not exists inventory_workspace_date_idx on public.inventory_movements (workspace_id, transaction_date desc);
+create index if not exists inventory_workspace_sku_idx on public.inventory_movements (workspace_id, sku_id);
+create index if not exists deposit_workspace_supplier_date_idx on public.supplier_deposit_movements (workspace_id, supplier_id, transaction_date desc);
+create index if not exists restocks_workspace_status_idx on public.restocks (workspace_id, status, transaction_date desc);
+create index if not exists orders_workspace_date_idx on public.sales_orders (workspace_id, order_date desc);
+create index if not exists orders_workspace_status_idx on public.sales_orders (workspace_id, internal_status);
+create index if not exists orders_channel_external_idx on public.sales_orders (workspace_id, channel, external_order_id);
+create index if not exists order_items_workspace_sku_idx on public.sales_order_items (workspace_id, sku_id);
+create index if not exists fulfillment_workspace_posted_idx on public.fulfillment_allocations (workspace_id, is_posted);
+create index if not exists imports_workspace_source_idx on public.import_batches (workspace_id, source, imported_at desc);
+create index if not exists reconciliation_workspace_date_idx on public.reconciliation_records (workspace_id, reconciliation_date desc, status);
+create index if not exists invoices_workspace_customer_idx on public.b2b_invoices (workspace_id, customer_id, status);
+create index if not exists expenses_workspace_period_idx on public.expenses (workspace_id, accounting_period desc);
+create index if not exists settlement_entries_workspace_order_idx on public.settlement_entries (workspace_id, external_order_id);
+create index if not exists webhook_events_workspace_source_idx on public.webhook_events (workspace_id, source, created_at desc);
